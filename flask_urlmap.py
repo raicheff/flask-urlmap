@@ -6,7 +6,12 @@
 #
 
 
+import logging
+
 import tldextract
+
+
+logger = logging.getLogger('Flask-URLMap')
 
 
 class URLMap(object):
@@ -30,16 +35,19 @@ class URLMap(object):
             self.init_app(app)
 
     def init_app(self, app):
-        self.scheme = app.config.get('PREFERRED_URL_SCHEME')
-        self.domain = tldextract.extract(app.config.get('SERVER_NAME')).registered_domain
-        self.map = app.config.get('URL_MAP')
+        config = self.scheme, domain, self.map = tuple(
+            app.config.get(name) for name in ('PREFERRED_URL_SCHEME', 'SERVER_NAME', 'URL_MAP')
+        )
+        if not all(config):
+            logger.debug('Flask-URLMap not configured')
+            return
+
+        self.domain = tldextract.extract(domain).registered_domain
 
         def external_url_handler(error, endpoint, values):
             url = self.lookup_url(endpoint, **values)
             if url is None:
-                # External lookup did not have a URL; Re-raise the BuildError, in context of original traceback.
                 raise error
-            # url_for will use this result, instead of raising BuildError.
             return url
 
         app.url_build_error_handlers.append(external_url_handler)
